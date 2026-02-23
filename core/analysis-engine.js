@@ -125,9 +125,9 @@ function analyzeRecentData(days = 7) {
     .slice(0, 5)
     .map(([topic, count]) => ({ topic, count }));
   
-  // 找出重复错误
+  // 找出重复错误（排除已解决的）
   result.repeated_errors = errors
-    .filter(e => e.occurrences >= 2)
+    .filter(e => e.occurrences >= 2 && e.status !== 'resolved')
     .sort((a, b) => b.occurrences - a.occurrences);
   
   // 统计重复失误类型

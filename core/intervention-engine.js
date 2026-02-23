@@ -140,8 +140,8 @@ function checkIntervention(analysisResults) {
     });
   }
   
-  // 检查重复错误
-  const repeatedErrors = errors.filter(e => e.occurrences >= INTERVENTION_RULES.error_recurrence.threshold);
+  // 检查重复错误（排除已解决的）
+  const repeatedErrors = errors.filter(e => e.occurrences >= INTERVENTION_RULES.error_recurrence.threshold && e.status !== 'resolved');
   if (repeatedErrors.length > 0) {
     repeatedErrors.forEach(err => {
       interventions.push({
