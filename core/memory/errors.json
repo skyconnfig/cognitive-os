@@ -1,15 +1,1 @@
-[
-  {
-    "type": "使用问题",
-    "category": "其他",
-    "first_seen": "2026-02-23",
-    "last_seen": "2026-02-23",
-    "occurrences": 3,
-    "trigger_context": [],
-    "behavioral_pattern": "误将用户的问题内容记录为错误类型",
-    "counter_strategy": "记录错误时，应选择预定义分类（认知偏差/技术错误/沟通错误/决策错误），而不是把用户的问题文本当作错误类型。记录前先确认：这真的是我的错误，还是只是用户的问题描述？",
-    "recurrence_interval_days": 0,
-    "severity_level": 1,
-    "status": "resolved"
-  }
-]
+[]

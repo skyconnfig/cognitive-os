@@ -140,8 +140,8 @@ function updateErrorDatabase(mistake, type) {
     console.error('[Reflection] 加载错误库失败:', e.message);
   }
   
-  // 查找现有错误
-  const existing = errors.find(e => e.type === type);
+  // 查找现有错误（按错误内容查找，而非分类）
+  const existing = errors.find(e => e.type === mistake);
   
   if (existing) {
     existing.occurrences += 1;
