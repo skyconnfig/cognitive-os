@@ -148,8 +148,8 @@ function updateErrorDatabase(mistake, type) {
     existing.last_seen = new Date().toISOString().split('T')[0];
   } else {
     errors.push({
-      type,
-      category: categorizeError(type),
+      type: mistake,  // 错误内容作为 type
+      category: categorizeError(mistake),  // 按错误内容分类
       first_seen: new Date().toISOString().split('T')[0],
       last_seen: new Date().toISOString().split('T')[0],
       occurrences: 1,
