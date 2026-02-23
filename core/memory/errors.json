@@ -1,1 +1,28 @@
-[]
+[
+  {
+    "type": "问题",
+    "category": "其他",
+    "first_seen": "2026-02-23",
+    "last_seen": "2026-02-23",
+    "occurrences": 2,
+    "trigger_context": [],
+    "behavioral_pattern": "",
+    "counter_strategy": "",
+    "recurrence_interval_days": 0,
+    "severity_level": 1,
+    "status": "active"
+  },
+  {
+    "type": "错误",
+    "category": "其他",
+    "first_seen": "2026-02-23",
+    "last_seen": "2026-02-23",
+    "occurrences": 2,
+    "trigger_context": [],
+    "behavioral_pattern": "",
+    "counter_strategy": "",
+    "recurrence_interval_days": 0,
+    "severity_level": 1,
+    "status": "active"
+  }
+]
