@@ -258,6 +258,36 @@ node core/git-sync.js status
 
 ---
 
+---
+
+## 🚀 长期记忆与 OpenCode 集成
+
+Cognitive-OS 现在具备了通过本地 Ollama 实现的**长期记忆系统**。这不仅是你的认知归档，更是 AI 代理（如 OpenCode）的“外挂大脑”。
+
+### 1. 开发者如何“喂养”记忆
+运行以下脚本，系统会自动从 OpenCode 导出今日对话、提取认知模式并完成向量化索引：
+```powershell
+.\import-today.ps1
+```
+> [!TIP]
+> 想要一次性导入所有历史记录？运行 `node core/auto-importer.js --all` 后执行 `node core/memory-engine.js sync`。
+
+### 2. 如何在 OpenCode 中使用
+你可以直接在对话中指挥代理调用记忆。例如：
+- **查错**：“帮我查一下，我之前在做这个项目时遇到过什么类似的错误？” -> *代理会自动检索历史 Bug 方案。*
+- **溯源**：“带我回顾一下上周关于架构选型的决策背景。” -> *代理会跨越会话边界调取相关记录。*
+- **唤醒**：“搜一下我之前对这个功能的实现思路。”
+
+### 3. 给 AI 代理的“系统提示词”建议
+如果你想让代理变得更聪明，可以在 OpenCode 的“系统提示词”或项目指令中加入：
+> “在处理任务前，请优先通过运行 `node core/memory-cli.js "关键词"` 检索我的长期记忆库（Cognitive-OS），以获取历史偏好、决策背景或已知错误解决方案。”
+
+### 4. 核心工具指令
+- **命令行搜索**：`node core/memory-cli.js "你的关键词"`
+- **全量同步**：`node core/memory-engine.js sync`
+
+---
+
 ## 许可证
 
 MIT

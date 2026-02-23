@@ -16,6 +16,7 @@ const analysisEngine = require('./analysis-engine');
 const interventionEngine = require('./intervention-engine');
 const reflectionEngine = require('./reflection-engine');
 const gitSync = require('./git-sync');
+const memoryEngine = require('./memory-engine');
 
 const REPORTS_DIR = path.join(__dirname, 'reports');
 const CONFIG_FILE = path.join(__dirname, '.config.json');
@@ -29,7 +30,7 @@ function ensureDirectories() {
     path.join(__dirname, 'memory', 'timeline'),
     REPORTS_DIR
   ];
-  
+
   for (const dir of dirs) {
     if (!fs.existsSync(dir)) {
       fs.mkdirSync(dir, { recursive: true });
@@ -48,7 +49,7 @@ function loadConfig() {
   } catch (e) {
     console.error('[Bootstrap] 加载配置失败:', e.message);
   }
-  
+
   // 默认配置
   return {
     analysis_days: 7,
@@ -64,7 +65,7 @@ function loadConfig() {
 function checkSystemStatus() {
   const state = stateManager.getState();
   const config = loadConfig();
-  
+
   return {
     state,
     config,
@@ -75,24 +76,24 @@ function checkSystemStatus() {
 /**
  * 生成启动报告
  */
-function generateStartupReport() {
+async function generateStartupReport() {
   ensureDirectories();
-  
+
   const analysisResult = analysisEngine.generateAnalysisReport();
   const interventionData = analysisEngine.getInterventionData();
   const status = checkSystemStatus();
-  
+
   // 检查是否需要干预
   const interventions = interventionEngine.checkIntervention(interventionData);
   const executionResult = interventionEngine.executeIntervention(interventions);
-  
+
   // 生成报告
   let report = '';
   report += '═══════════════════════════════════════════════════════════\n';
   report += '🧠 Cognitive-OS V1 启动报告\n';
   report += `🕐 ${new Date().toLocaleString('zh-CN')}\n`;
   report += '═══════════════════════════════════════════════════════════\n\n';
-  
+
   // 当前状态
   report += '【当前状态】\n';
   report += `  • 干预等级: ${status.state.intervention_level}\n`;
@@ -105,7 +106,7 @@ function generateStartupReport() {
     report += `  • 当前目标: ${status.state.current_goal}\n`;
   }
   report += '\n';
-  
+
   // 扩展能力
   const expandCheck = status.canExpand;
   if (!expandCheck.allowed) {
@@ -115,24 +116,28 @@ function generateStartupReport() {
   } else {
     report += '✅ 【扩展能力】正常\n\n';
   }
-  
+
   // 分析报告
   report += analysisResult.text;
-  
+
   // 干预报告
   report += '\n';
   report += interventionEngine.generateInterventionReport(interventions);
-  
+
   // 进化建议
   report += '\n';
   report += generateEvolutionSuggestions(analysisResult, status);
-  
+
+  // 历史记忆唤醒
+  const memories = await recallRelevantMemories(status.state.current_goal || '最近的认知状态');
+  report += '\n' + memories;
+
   // 保存报告
   const today = new Date().toISOString().split('T')[0];
   const reportFile = path.join(REPORTS_DIR, `startup-report-${today}.txt`);
   fs.writeFileSync(reportFile, report, 'utf-8');
   console.log(`[Bootstrap] 报告已保存: ${reportFile}`);
-  
+
   return {
     report,
     interventions,
@@ -150,10 +155,10 @@ function generateEvolutionSuggestions(analysisResult, status) {
   suggestions += '═══════════════════════════════════════\n';
   suggestions += '💡 进化建议\n';
   suggestions += '═══════════════════════════════════════\n\n';
-  
+
   const analysis = analysisResult.analysis;
   let hasSuggestions = false;
-  
+
   // 建议 1: 精力管理
   if (analysis.energy_distribution.low > analysis.energy_distribution.high) {
     suggestions += '1. ⚠️ 精力管理\n';
@@ -163,7 +168,7 @@ function generateEvolutionSuggestions(analysisResult, status) {
     suggestions += '   • 避免重要决策在低精力时段\n\n';
     hasSuggestions = true;
   }
-  
+
   // 建议 2: 完成旧任务
   if (analysis.unfinished_count >= 3) {
     suggestions += '2. ⚠️ 清理未完成事项\n';
@@ -171,7 +176,7 @@ function generateEvolutionSuggestions(analysisResult, status) {
     suggestions += '   建议优先完成旧任务，再考虑新增。\n\n';
     hasSuggestions = true;
   }
-  
+
   // 建议 3: 错误改进
   if (analysis.repeated_errors.length > 0) {
     suggestions += '3. ⚠️ 错误模式识别\n';
@@ -181,7 +186,7 @@ function generateEvolutionSuggestions(analysisResult, status) {
     suggestions += '   • 建立预防机制\n\n';
     hasSuggestions = true;
   }
-  
+
   // 建议 4: 高干预等级
   if (status.state.intervention_level >= 2) {
     suggestions += '4. ℹ️ 高干预模式\n';
@@ -193,26 +198,53 @@ function generateEvolutionSuggestions(analysisResult, status) {
     suggestions += '   • 完成现有任务后再扩张\n\n';
     hasSuggestions = true;
   }
-  
+
   if (!hasSuggestions) {
     suggestions += '   状态良好，继续保持！\n\n';
   }
-  
+
   suggestions += '═══════════════════════════════════════\n';
-  
+
   return suggestions;
+}
+
+/**
+ * 历史记忆唤醒 - 根据当前目标或状态检索相关记忆
+ */
+async function recallRelevantMemories(query) {
+  let output = '═══════════════════════════════════════\n';
+  output += '🧠 历史记忆唤醒\n';
+  output += '═══════════════════════════════════════\n\n';
+
+  try {
+    const results = await memoryEngine.search(query, 3);
+    if (results.length === 0) {
+      output += '   暂无相关历史记忆，继续探索中...\n';
+    } else {
+      for (const r of results) {
+        const simPercent = Math.round(r.similarity * 100);
+        output += `  • [${r.metadata.date}] (${simPercent}% 相关) [${r.metadata.type}]\n`;
+        output += `    ${r.text}\n\n`;
+      }
+    }
+  } catch (e) {
+    output += `   ⚠️ 记忆唤醒失败: ${e.message}\n`;
+  }
+
+  output += '═══════════════════════════════════════\n';
+  return output;
 }
 
 /**
  * 交互式启动（用于手动触发）
  */
-function interactiveBootstrap() {
+async function interactiveBootstrap() {
   console.log('\n🧠 Cognitive-OS V1 启动中...\n');
-  
-  const result = generateStartupReport();
-  
+
+  const result = await generateStartupReport();
+
   console.log(result.report);
-  
+
   // 自动 Git 同步
   const config = loadConfig();
   if (config.auto_git_commit) {
@@ -226,7 +258,7 @@ function interactiveBootstrap() {
       console.log(`[GitSync] ⚠️ 同步失败: ${syncResult.reason}`);
     }
   }
-  
+
   return result;
 }
 
@@ -236,17 +268,17 @@ function interactiveBootstrap() {
 function quickCheck() {
   const status = checkSystemStatus();
   const canExpand = status.canExpand;
-  
+
   console.log('\n🧠 Cognitive-OS 状态检查');
   console.log(`  干预等级: ${status.state.intervention_level}`);
   console.log(`  专注模式: ${status.state.focus_mode}`);
   console.log(`  扩展锁定: ${status.state.expansion_lock ? '是 ⚠️' : '否 ✅'}`);
-  
+
   if (!canExpand.allowed) {
     console.log(`  限制原因: ${canExpand.reason}`);
     console.log('\n  💡 提示: 完成旧任务后可解锁扩展');
   }
-  
+
   return status;
 }
 
@@ -265,42 +297,42 @@ function recordSession(sessionData) {
   if (sessionData.topic) {
     reflectionEngine.setMainTopic(sessionData.topic);
   }
-  
+
   if (sessionData.energy) {
     reflectionEngine.setEnergyState(sessionData.energy);
   }
-  
+
   if (sessionData.decisions) {
     for (const d of sessionData.decisions) {
       reflectionEngine.addDecision(d.decision, d.context || '');
     }
   }
-  
+
   if (sessionData.mistakes) {
     for (const m of sessionData.mistakes) {
       reflectionEngine.addMistake(m.mistake, m.type || 'general');
     }
   }
-  
+
   if (sessionData.unfinished) {
     for (const u of sessionData.unfinished) {
       reflectionEngine.addUnfinished(u);
     }
   }
-  
+
   if (sessionData.insights) {
     for (const i of sessionData.insights) {
       reflectionEngine.addInsight(i);
     }
   }
-  
+
   console.log('✅ 会话记录已保存');
 }
 
 // 主入口
 if (require.main === module) {
   const args = process.argv.slice(2);
-  
+
   if (args[0] === '--check' || args[0] === '-c') {
     quickCheck();
   } else if (args[0] === '--goal' && args[1]) {

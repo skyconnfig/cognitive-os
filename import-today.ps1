@@ -22,6 +22,10 @@ Write-Host "🧠 生成认知报告..." -ForegroundColor Yellow
 node core\bootstrap.js
 
 Write-Host ""
+Write-Host "🧠 同步长期记忆索引..." -ForegroundColor Yellow
+node core\memory-engine.js sync
+
+Write-Host ""
 Write-Host "═══════════════════════════════════════" -ForegroundColor Green
 Write-Host "✅ 全部完成！" -ForegroundColor Green
 Write-Host "═══════════════════════════════════════" -ForegroundColor Green

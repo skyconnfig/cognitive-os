@@ -16,6 +16,7 @@ const path = require('path');
 
 const reflectionEngine = require('./reflection-engine');
 const stateManager = require('./state-manager');
+const memoryEngine = require('./memory-engine');
 
 const TEMP_FILE = path.join(__dirname, '..', 'temp-session.json');
 
@@ -28,16 +29,16 @@ function getSessionList() {
       encoding: 'utf-8',
       timeout: 30000
     });
-    
+
     const sessions = [];
     const lines = output.split('\n');
-    
+
     for (const line of lines) {
       // 跳过标题行和分隔线
       if (line.startsWith('Session') || line.startsWith('─') || !line.trim()) {
         continue;
       }
-      
+
       // 解析: ses_xxx  Title  Updated
       const match = line.match(/^(ses_\w+)\s+(.+?)\s+(\d{2}:\d{2}(?:\s+·\s+\d{4}\/\d{1,2}\/\d{1,2})?)/);
       if (match) {
@@ -48,7 +49,7 @@ function getSessionList() {
         });
       }
     }
-    
+
     return sessions;
   } catch (e) {
     console.error('[AutoImporter] 获取列表失败:', e.message);
@@ -65,7 +66,7 @@ function exportSession(sessionId) {
       encoding: 'utf-8',
       timeout: 60000
     });
-    
+
     // 去掉 "Exporting session:" 前缀
     const jsonStr = output.replace(/^Exporting session:.*\n/, '');
     return JSON.parse(jsonStr);
@@ -93,21 +94,21 @@ function extractInsights(data) {
     model: null,
     messageCount: 0
   };
-  
+
   if (!data.messages) return insights;
-  
+
   insights.messageCount = data.messages.length;
-  
+
   // 获取使用的模型
   if (data.messages[0]?.info?.model) {
     insights.model = data.messages[0].info.model.modelID;
   }
-  
+
   const allContent = JSON.stringify(data.messages).toLowerCase();
-  
+
   // 工具关键词
   const toolPatterns = [
-    'read', 'write', 'edit', 'grep', 'glob', 'bash', 'task', 
+    'read', 'write', 'edit', 'grep', 'glob', 'bash', 'task',
     'git', 'commit', 'push', 'lsp_', 'ast_grep', 'websearch', 'webfetch'
   ];
   for (const p of toolPatterns) {
@@ -115,7 +116,7 @@ function extractInsights(data) {
       insights.tools.push(p);
     }
   }
-  
+
   // 文件扩展名
   const extPatterns = [
     '.js', '.ts', '.jsx', '.tsx', '.py', '.json', '.md', '.yaml', '.yml',
@@ -126,7 +127,7 @@ function extractInsights(data) {
       insights.files.push(p.substring(1));
     }
   }
-  
+
   // 错误关键词
   const errorPatterns = [
     'error', 'failed', 'bug', '问题', '错误', 'fix', 'fixing',
@@ -138,10 +139,10 @@ function extractInsights(data) {
       insights.errors.push(p);
     }
   }
-  
+
   // 决策关键词
   const decisionPatterns = [
-    '决定', '选择', '用', '采用', '决定用', 
+    '决定', '选择', '用', '采用', '决定用',
     'choose', 'decide', 'use', 'adopt', 'go with', 'build', 'create'
   ];
   for (const p of decisionPatterns) {
@@ -149,7 +150,7 @@ function extractInsights(data) {
       insights.decisions.push(p);
     }
   }
-  
+
   // 提取话题（第一条用户消息）
   for (const msg of data.messages) {
     if (msg.info?.role === 'user') {
@@ -160,13 +161,13 @@ function extractInsights(data) {
       }
     }
   }
-  
+
   // 去重
   insights.tools = [...new Set(insights.tools)];
   insights.files = [...new Set(insights.files)];
   insights.errors = [...new Set(insights.errors)];
   insights.decisions = [...new Set(insights.decisions)];
-  
+
   return insights;
 }
 
@@ -175,13 +176,13 @@ function extractInsights(data) {
  */
 function importSession(data) {
   const insights = extractInsights(data);
-  
+
   console.log(`\n📥 导入: ${insights.title || insights.sessionId}`);
   console.log(`   模型: ${insights.model || 'unknown'}`);
   console.log(`   消息: ${insights.messageCount}`);
   console.log(`   工具: ${insights.tools.slice(0, 5).join(', ')}`);
   console.log(`   文件: ${insights.files.slice(0, 5).join(', ')}`);
-  
+
   // 记录话题
   if (insights.topics.length > 0) {
     const topic = insights.topics[0].replace(/[^a-zA-Z0-9\u4e00-\u9fa5]/g, ' ').trim();
@@ -189,32 +190,32 @@ function importSession(data) {
       reflectionEngine.setMainTopic(topic.substring(0, 50));
     }
   }
-  
+
   // 记录使用的模型
   if (insights.model) {
     reflectionEngine.addInsight(`使用模型: ${insights.model}`);
   }
-  
+
   // 记录工具偏好
   if (insights.tools.length > 0) {
     reflectionEngine.addInsight(`常用工具: ${insights.tools.slice(0, 5).join(', ')}`);
   }
-  
+
   // 记录文件类型偏好
   if (insights.files.length > 0) {
     reflectionEngine.addInsight(`常用文件: ${insights.files.slice(0, 5).join(', ')}`);
   }
-  
+
   // 记录错误
   for (const error of insights.errors.slice(0, 2)) {
     reflectionEngine.addMistake(error, 'session问题');
   }
-  
+
   // 记录决策
   for (const decision of insights.decisions.slice(0, 2)) {
     reflectionEngine.addDecision(decision, 'session提取');
   }
-  
+
   // 根据消息数量设置精力
   if (insights.messageCount > 30) {
     reflectionEngine.setEnergyState('high');
@@ -223,9 +224,19 @@ function importSession(data) {
   } else {
     reflectionEngine.setEnergyState('low');
   }
-  
+
+
+  // 索引到长期记忆
+  const sessionText = `Topic: ${insights.topics[0] || 'Unknown'} | Tools: ${insights.tools.join(', ')} | Files: ${insights.files.join(', ')}`;
+  memoryEngine.add(`session_${data.info?.id || Date.now()}`, sessionText, {
+    type: 'session',
+    sessionId: data.info?.id,
+    date: new Date().toISOString().split('T')[0]
+  }).then(() => memoryEngine.save())
+    .catch(e => console.error('[AutoImporter] 记忆索引失败:', e.message));
+
   console.log('   ✅ 完成');
-  
+
   return insights;
 }
 
@@ -235,17 +246,17 @@ function importSession(data) {
 function importLatest() {
   console.log('📋 获取 session 列表...');
   const sessions = getSessionList();
-  
+
   if (sessions.length === 0) {
     console.log('没有找到 sessions');
     return;
   }
-  
+
   console.log(`找到 ${sessions.length} 个 sessions`);
-  
+
   const latest = sessions[0];
   console.log(`\n🔄 导入最新: ${latest.title}`);
-  
+
   const data = exportSession(latest.id);
   if (data) {
     importSession(data);
@@ -258,19 +269,19 @@ function importLatest() {
 function importToday() {
   console.log('📋 获取今日 sessions...');
   const sessions = getSessionList();
-  
+
   const today = new Date();
   const todayStr = today.toLocaleDateString('zh-CN');
-  
+
   const todaySessions = sessions.filter(s => s.updated.includes(todayStr));
-  
+
   if (todaySessions.length === 0) {
     console.log('今天没有 sessions');
     return;
   }
-  
+
   console.log(`今日找到 ${todaySessions.length} 个 sessions\n`);
-  
+
   for (const session of todaySessions) {
     const data = exportSession(session.id);
     if (data) {
@@ -285,12 +296,12 @@ function importToday() {
 function importAll(limit = 20) {
   console.log(`📋 获取 sessions (限制 ${limit})...`);
   const sessions = getSessionList();
-  
+
   const toImport = sessions.slice(0, limit);
   console.log(`将导入 ${toImport.length} 个 sessions\n`);
-  
+
   const allInsights = [];
-  
+
   for (const session of toImport) {
     const data = exportSession(session.id);
     if (data) {
@@ -298,7 +309,7 @@ function importAll(limit = 20) {
       allInsights.push(insights);
     }
   }
-  
+
   console.log(generateReport(allInsights));
 }
 
@@ -310,7 +321,7 @@ function generateReport(allInsights) {
   const fileCount = {};
   const errorCount = {};
   const modelCount = {};
-  
+
   for (const insights of allInsights) {
     for (const t of insights.tools) {
       toolCount[t] = (toolCount[t] || 0) + 1;
@@ -325,11 +336,11 @@ function generateReport(allInsights) {
       modelCount[insights.model] = (modelCount[insights.model] || 0) + 1;
     }
   }
-  
+
   let report = '\n═══════════════════════════════════════\n';
   report += '📊 OpenCode 偏好分析报告\n';
   report += '═══════════════════════════════════════\n\n';
-  
+
   // 常用模型
   if (Object.keys(modelCount).length > 0) {
     report += '【常用模型】\n';
@@ -338,7 +349,7 @@ function generateReport(allInsights) {
       .forEach(([m, c]) => report += `  • ${m}: ${c} 次\n`);
     report += '\n';
   }
-  
+
   // 常用工具
   report += '【常用工具 Top 10】\n';
   Object.entries(toolCount)
@@ -346,7 +357,7 @@ function generateReport(allInsights) {
     .slice(0, 10)
     .forEach(([t, c]) => report += `  • ${t}: ${c} 次\n`);
   report += '\n';
-  
+
   // 文件类型
   report += '【常用文件类型】\n';
   Object.entries(fileCount)
@@ -354,7 +365,7 @@ function generateReport(allInsights) {
     .slice(0, 10)
     .forEach(([f, c]) => report += `  • ${f}: ${c} 次\n`);
   report += '\n';
-  
+
   // 常见问题
   if (Object.keys(errorCount).length > 0) {
     report += '【常见问题】\n';
@@ -364,20 +375,20 @@ function generateReport(allInsights) {
       .forEach(([e, c]) => report += `  • ${e}: ${c} 次\n`);
     report += '\n';
   }
-  
+
   report += '═══════════════════════════════════════\n';
-  
+
   return report;
 }
 
 // 主入口
 if (require.main === module) {
   const args = process.argv.slice(2);
-  
+
   console.log('═══════════════════════════════════════');
   console.log('OpenCode Session Auto-Importer');
   console.log('═══════════════════════════════════════\n');
-  
+
   if (args.includes('--all')) {
     importAll(30);
   } else if (args.includes('--today')) {
@@ -385,19 +396,19 @@ if (require.main === module) {
   } else if (args.includes('--stats')) {
     const sessions = getSessionList();
     const allInsights = [];
-    
+
     for (const s of sessions.slice(0, 20)) {
       const data = exportSession(s.id);
       if (data) {
         allInsights.push(extractInsights(data));
       }
     }
-    
+
     console.log(generateReport(allInsights));
   } else {
     importLatest();
   }
-  
+
   console.log('\n✅ 导入完成！');
   console.log('运行 node core/bootstrap.js 查看报告');
 }

@@ -17,6 +17,7 @@ const { execSync } = require('child_process');
 
 const reflectionEngine = require('./reflection-engine');
 const stateManager = require('./state-manager');
+const memoryEngine = require('./memory-engine');
 
 // 尝试多个可能的 OpenCode 数据目录
 const SEARCH_PATHS = [
@@ -64,14 +65,14 @@ function getSessionsFromFiles() {
     console.log('[Importer] 未找到 OpenCode 数据目录');
     return [];
   }
-  
+
   // 尝试多个可能的 session 目录
   const sessionDirs = [
     path.join(opencodeDir, 'sessions'),
     path.join(opencodeDir, 'data', 'sessions'),
     path.join(opencodeDir, 'user', 'sessions'),
   ];
-  
+
   for (const dir of sessionDirs) {
     if (fs.existsSync(dir)) {
       try {
@@ -85,7 +86,7 @@ function getSessionsFromFiles() {
       }
     }
   }
-  
+
   return [];
 }
 
@@ -115,17 +116,17 @@ function extractFromSession(sessionData) {
     messageCount: 0,
     keywords: []
   };
-  
+
   // 错误关键词
   const errorKeywords = ['error', 'failed', 'bug', '问题', '错误', '修复', 'fix'];
   // 决策关键词  
   const decisionKeywords = ['决定', '选择', '用', '采用', '决定用', 'choose', 'decide', 'use'];
   // 工具关键词
   const toolKeywords = ['read', 'write', 'edit', 'grep', 'glob', 'bash', 'task', 'git'];
-  
+
   // 简化版：从 session 内容中提取
   // 实际应该解析 session.messages
-  
+
   return insights;
 }
 
@@ -141,11 +142,11 @@ function extractInsights(messages) {
     files: [],
     messageCount: messages?.length || 0
   };
-  
+
   if (!messages || !Array.isArray(messages)) return insights;
-  
+
   const content = JSON.stringify(messages).toLowerCase();
-  
+
   // 提取错误
   const errorPatterns = ['error', 'failed', 'bug', '问题', '错误', '修复', 'fix'];
   for (const p of errorPatterns) {
@@ -153,7 +154,7 @@ function extractInsights(messages) {
       insights.errors.push(p);
     }
   }
-  
+
   // 提取决策
   const decisionPatterns = ['决定', '选择', '用', '采用', 'choose', 'use'];
   for (const p of decisionPatterns) {
@@ -161,7 +162,7 @@ function extractInsights(messages) {
       insights.decisions.push(p);
     }
   }
-  
+
   // 提取工具使用
   const toolPatterns = ['read', 'write', 'edit', 'grep', 'glob', 'bash', 'task', 'git', 'commit'];
   for (const p of toolPatterns) {
@@ -169,22 +170,22 @@ function extractInsights(messages) {
       insights.tools.push(p);
     }
   }
-  
+
   // 提取文件扩展名
   const extMatches = content.match(/\.([a-z]+)"/g) || [];
   insights.files = [...new Set(extMatches.map(e => e.replace('"', '')))];
-  
+
   // 提取话题（第一句话）
   const firstUserMsg = messages.find(m => m.role === 'user');
   if (firstUserMsg && firstUserMsg.content) {
     insights.topics.push(firstUserMsg.content.substring(0, 100));
   }
-  
+
   // 去重
   insights.errors = [...new Set(insights.errors)];
   insights.decisions = [...new Set(insights.decisions)];
   insights.tools = [...new Set(insights.tools)];
-  
+
   return insights;
 }
 
@@ -193,37 +194,37 @@ function extractInsights(messages) {
  */
 function importSession(messages, sessionId = 'unknown') {
   console.log(`\n[Importer] 导入 session: ${sessionId}`);
-  
+
   const insights = extractInsights(messages);
-  
+
   console.log(`  • 消息数: ${insights.messageCount}`);
   console.log(`  • 话题: ${insights.topics.length}`);
   console.log(`  • 错误关键词: ${insights.errors.length}`);
   console.log(`  • 决策关键词: ${insights.decisions.length}`);
   console.log(`  • 工具: ${insights.tools.length}`);
-  
+
   // 记录话题
   if (insights.topics.length > 0) {
     reflectionEngine.setMainTopic(insights.topics[0]);
   }
-  
+
   // 记录错误
   for (const error of insights.errors.slice(0, 3)) {
     reflectionEngine.addMistake(error, '使用问题');
   }
-  
+
   // 记录工具偏好
   if (insights.tools.length > 0) {
     const toolSummary = `常用工具: ${insights.tools.slice(0, 5).join(', ')}`;
     reflectionEngine.addInsight(toolSummary);
   }
-  
+
   // 记录文件类型偏好
   if (insights.files.length > 0) {
     const fileSummary = `常用文件类型: ${insights.files.slice(0, 5).join(', ')}`;
     reflectionEngine.addInsight(fileSummary);
   }
-  
+
   // 根据消息数量设置精力状态
   if (insights.messageCount > 30) {
     reflectionEngine.setEnergyState('high');
@@ -232,9 +233,16 @@ function importSession(messages, sessionId = 'unknown') {
   } else {
     reflectionEngine.setEnergyState('low');
   }
-  
+
+
+  // 索引到长期记忆
+  const sessionText = `Topic: ${insights.topics[0] || 'Unknown'} | Tools: ${insights.tools.join(', ')} | Files: ${insights.files.join(', ')}`;
+  memoryEngine.add(`session_${sessionId}`, sessionText, { type: 'session', sessionId, date: new Date().toISOString().split('T')[0] })
+    .then(() => memoryEngine.save())
+    .catch(e => console.error('[Importer] 记忆索引失败:', e.message));
+
   console.log('  ✅ 完成');
-  
+
   return insights;
 }
 
@@ -245,7 +253,7 @@ function generatePreferenceReport(allInsights) {
   const toolCount = {};
   const fileCount = {};
   const errorCount = {};
-  
+
   for (const insights of allInsights) {
     for (const t of insights.tools) {
       toolCount[t] = (toolCount[t] || 0) + 1;
@@ -257,11 +265,11 @@ function generatePreferenceReport(allInsights) {
       errorCount[e] = (errorCount[e] || 0) + 1;
     }
   }
-  
+
   let report = '\n═══════════════════════════════════════\n';
   report += '📊 OpenCode 偏好分析报告\n';
   report += '═══════════════════════════════════════\n\n';
-  
+
   // 常用工具
   report += '【常用工具 Top 10】\n';
   Object.entries(toolCount)
@@ -269,7 +277,7 @@ function generatePreferenceReport(allInsights) {
     .slice(0, 10)
     .forEach(([t, c]) => report += `  • ${t}: ${c} 次\n`);
   report += '\n';
-  
+
   // 文件类型
   report += '【常用文件类型】\n';
   Object.entries(fileCount)
@@ -277,7 +285,7 @@ function generatePreferenceReport(allInsights) {
     .slice(0, 10)
     .forEach(([f, c]) => report += `  • ${f}: ${c} 次\n`);
   report += '\n';
-  
+
   // 常见问题
   if (Object.keys(errorCount).length > 0) {
     report += '【常见问题类型】\n';
@@ -287,23 +295,23 @@ function generatePreferenceReport(allInsights) {
       .forEach(([e, c]) => report += `  • ${e}: ${c} 次\n`);
     report += '\n';
   }
-  
+
   report += '═══════════════════════════════════════\n';
-  
+
   return report;
 }
 
 // 手动导入函数（供外部调用）
 async function importFromSessionList(sessionIds) {
   const allInsights = [];
-  
+
   for (const sessionId of sessionIds) {
     try {
       // 尝试通过多种方式获取 session 数据
       // 方式 1: 读取文件
       const sessions = getSessionsFromFiles();
       const session = sessions.find(s => s.id === sessionId);
-      
+
       if (session && fs.existsSync(session.path)) {
         const data = JSON.parse(fs.readFileSync(session.path, 'utf-8'));
         const insights = importSession(data.messages || [], sessionId);
@@ -315,18 +323,18 @@ async function importFromSessionList(sessionIds) {
       console.error(`[Importer] 导入失败 ${sessionId}:`, e.message);
     }
   }
-  
+
   return allInsights;
 }
 
 // 主入口
 if (require.main === module) {
   const args = process.argv.slice(2);
-  
+
   console.log('═══════════════════════════════════════');
   console.log('OpenCode Session Importer v2');
   console.log('═══════════════════════════════════════\n');
-  
+
   if (args.includes('--list')) {
     const sessions = getSessionsFromFiles();
     console.log(`找到 ${sessions.length} 个 sessions:\n`);
@@ -347,7 +355,7 @@ if (require.main === module) {
     const sessions = getSessionsFromFiles();
     console.log(`导入 ${sessions.length} 个 sessions...\n`);
     const allInsights = [];
-    
+
     for (const s of sessions) {
       try {
         if (fs.existsSync(s.path)) {
@@ -359,12 +367,12 @@ if (require.main === module) {
         console.error(`[Importer] 失败: ${s.id}`, e.message);
       }
     }
-    
+
     console.log(generatePreferenceReport(allInsights));
   } else if (args.includes('--stats')) {
     const sessions = getSessionsFromFiles();
     const allInsights = [];
-    
+
     for (const s of sessions.slice(0, 30)) {
       try {
         if (fs.existsSync(s.path)) {
@@ -375,7 +383,7 @@ if (require.main === module) {
         // 忽略
       }
     }
-    
+
     console.log(generatePreferenceReport(allInsights));
   } else {
     console.log('Usage:');
