@@ -1,0 +1,44 @@
+{
+  "date": "2026-02-23",
+  "main_topic": "用户问题: 帮我解决 No payment method 问题",
+  "decisions": [
+    {
+      "decision": "用",
+      "context": "从 session 提取",
+      "timestamp": "2026-02-23T01:56:16.353Z"
+    }
+  ],
+  "mistakes": [
+    {
+      "mistake": "问题",
+      "type": "使用问题",
+      "timestamp": "2026-02-23T01:56:16.349Z"
+    },
+    {
+      "mistake": "错误",
+      "type": "使用问题",
+      "timestamp": "2026-02-23T01:56:16.351Z"
+    },
+    {
+      "mistake": "no payment",
+      "type": "使用问题",
+      "timestamp": "2026-02-23T01:56:16.352Z"
+    }
+  ],
+  "error_types": [],
+  "energy_state": "low",
+  "unfinished_threads": [],
+  "insights": [
+    {
+      "insight": "常用工具: read, git",
+      "timestamp": "2026-02-23T01:56:16.354Z"
+    },
+    {
+      "insight": "常用文件类型: ai, js, md",
+      "timestamp": "2026-02-23T01:56:16.354Z"
+    }
+  ],
+  "self_bias_detected": [],
+  "created_at": "2026-02-23T01:56:16.348Z",
+  "last_updated": "2026-02-23T01:56:16.355Z"
+}

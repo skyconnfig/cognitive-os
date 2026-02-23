@@ -1,0 +1,20 @@
+[
+  {
+    "type": "重复错误",
+    "description": "错误 \"使用问题\" 出现 3 次",
+    "data": {
+      "type": "使用问题",
+      "category": "其他",
+      "first_seen": "2026-02-23",
+      "last_seen": "2026-02-23",
+      "occurrences": 3,
+      "trigger_context": [],
+      "behavioral_pattern": "",
+      "counter_strategy": "",
+      "recurrence_interval_days": 0,
+      "severity_level": 1,
+      "status": "active"
+    },
+    "identified_at": "2026-02-23T01:56:29.981Z"
+  }
+]
