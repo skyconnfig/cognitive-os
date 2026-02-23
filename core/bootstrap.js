@@ -15,6 +15,7 @@ const stateManager = require('./state-manager');
 const analysisEngine = require('./analysis-engine');
 const interventionEngine = require('./intervention-engine');
 const reflectionEngine = require('./reflection-engine');
+const gitSync = require('./git-sync');
 
 const REPORTS_DIR = path.join(__dirname, 'reports');
 const CONFIG_FILE = path.join(__dirname, '.config.json');
@@ -211,6 +212,20 @@ function interactiveBootstrap() {
   const result = generateStartupReport();
   
   console.log(result.report);
+  
+  // 自动 Git 同步
+  const config = loadConfig();
+  if (config.auto_git_commit) {
+    console.log('\n[GitSync] 开始自动同步...');
+    const syncResult = gitSync.sync('brain: update cognitive state');
+    if (syncResult.success) {
+      console.log('[GitSync] ✅ 自动同步完成');
+    } else if (syncResult.reason === 'no changes') {
+      console.log('[GitSync] 没有需要同步的更改');
+    } else {
+      console.log(`[GitSync] ⚠️ 同步失败: ${syncResult.reason}`);
+    }
+  }
   
   return result;
 }
